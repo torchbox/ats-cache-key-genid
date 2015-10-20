@@ -20,7 +20,7 @@
 #include <ts/ts.h>
 #include <stdio.h>
 #include <string.h>
-#include "/opt/kyotocabinet/include/kclangc.h"
+#include "kclangc.h"
 
 #define PLUGIN_NAME "cache-key-genid"
 #define PLUGIN_VERSION "1.0.6"
@@ -48,6 +48,7 @@ static void get_genid_host(char **host, char *url) {
     }
 }
 
+#if TS_VERSION_MAJOR < 6
 // create a new string from url, injecting gen_id, so http://foo.com/s.css becomes http://foo.com.7/s.css
 static char* get_genid_newurl(char *url, char *host, int gen_id) {
     char *pt1;
@@ -69,6 +70,7 @@ static char* get_genid_newurl(char *url, char *host, int gen_id) {
     strcpy(pt1, pt2);
     return newurl;
 }
+#endif  /* TS_MAJOR_VERSION < 6 */
 
 /* get_genid
  * Looks up the host's genid in the host->genid database
@@ -148,11 +150,10 @@ static int handle_hook(TSCont *contp, TSEvent event, void *edata) {
             if (ok) {
                 TSDebug(PLUGIN_NAME, "From url (%s) discovered host (%s)\n", url, host);
                 gen_id = get_genid(host);
-                if ( gen_id ) {
+#if TS_VERSION_MAJOR < 6
+                /* 5.3 - use TSCacheUrlSet() */
+                if (gen_id) {
                     newurl = get_genid_newurl(url, host, gen_id);
-                    //newurl_len = strlen(url) + 6 + ceil(log10(gen_id+1)) + 1; // URL + '/gEnId' + gen_id + '\0'
-                    //newurl = calloc(num, newurl_len * sizeof(char));
-                    //sprintf(newurl, "%s/gEnId%d", url, gen_id);
                 }
                 if (newurl) {
                     TSDebug(PLUGIN_NAME, "Rewriting cache URL for %s to %s\n", url, newurl);
@@ -162,6 +163,16 @@ static int handle_hook(TSCont *contp, TSEvent event, void *edata) {
                         ok = 0;
                     }
                 }
+#else
+                /* 6.x+ - set cache generation */
+                if (gen_id) {
+                    if (TSHttpTxnConfigIntSet(txnp, TS_CONFIG_HTTP_CACHE_GENERATION, gen_id) != TS_SUCCESS) {
+                        TSDebug(PLUGIN_NAME, "Error, unable to modify cache url\n");
+                        TSError("[%s] Unable to modify cache url from %s to %s\n", PLUGIN_NAME, url, newurl);
+                        ok = 0;
+                    }
+                }
+#endif
             }
             /* Clean up */
             if (url) TSfree(url);
@@ -190,8 +201,8 @@ void TSPluginInit(int argc, const char *argv[]) {
         /*
         db = kcdbnew();
         if (!kcdbopen(db, genid_kyoto_db, KCOWRITER | KCOCREATE)) {
-	    TSError("[%s] plugin registration failed. Could not open %s", PLUGIN_NAME, genid_kyoto_db);
-	    return;
+            TSError("[%s] plugin registration failed. Could not open %s", PLUGIN_NAME, genid_kyoto_db);
+            return;
         }
         kcdbclose(db);
         kcdbdel(db);
