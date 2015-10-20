@@ -202,7 +202,11 @@ void TSPluginInit(int argc, const char *argv[]) {
         return;
     }
 
+#if TS_VERSION_MAJOR < 6
     if (TSPluginRegister(TS_SDK_VERSION_3_0, &info) != TS_SUCCESS) {
+#else
+    if (TSPluginRegister(&info) != TS_SUCCESS) {
+#endif
         TSError("[%s] plugin registration failed.  check version.", PLUGIN_NAME);
         return;
     }
