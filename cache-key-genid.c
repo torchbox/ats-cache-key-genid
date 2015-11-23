@@ -88,6 +88,7 @@ static int get_genid (char *host) {
     if (! kcdbopen(db, genid_kyoto_db, KCOREADER | KCONOLOCK ) ) {
         TSDebug(PLUGIN_NAME, "could not open the genid database %s\n", genid_kyoto_db);
         TSError("[%s] could not open the genid database\n", PLUGIN_NAME);
+        kcdbdel(db);
         return 0;
     }
     vbuf = kcdbget(db, host, strlen(host), &vsiz);
@@ -96,6 +97,7 @@ static int get_genid (char *host) {
         answer = (int) strtol(vbuf, NULL, 10);
         kcfree(vbuf);
         kcdbclose(db);
+        kcdbdel(db);
         return answer;
     } else {
         // do I really want to set a record here?  This will make the db very large.
@@ -109,6 +111,7 @@ static int get_genid (char *host) {
         TSDebug(PLUGIN_NAME, "kcdbget(%s) - no record found, len(%d)\n", host, host_size);
     }
     kcdbclose(db); 
+    kcdbdel(db);
     return 0;
 }
 
